@@ -111,3 +111,11 @@ label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(-
 a.xref { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
 a.xref:hover { color: var(--accent); }
 footer { color: var(--muted); font-size: 12.5px; margin-top: 18px; max-width: 90ch; }
+
+.rules-toc { margin: 0 0 18px; color: var(--muted); }
+.rules-toc a { color: inherit; }
+.wrap section { margin-bottom: 22px; }
+.wrap section h2 { font-size: 15px; margin: 0 0 8px; }
+.lvl { font-weight: 700; }
+.lvl.ERROR { color: var(--err); }
+.lvl.WARN { color: var(--warn); }
