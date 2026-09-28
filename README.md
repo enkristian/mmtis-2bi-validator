@@ -11,7 +11,7 @@ Everything runs in your browser. Drop in your own XML file(s) — nothing is upl
 - `index.html` — markup only
 - `styles.css` — all styling
 - `meta.js` — NeTEx enum values, product references, and rule text (no user data)
-- `validate.js` / `delivery.js` — validation logic
+- `validate_2bi.js` / `delivery_2bi.js` — validation logic
 - `app.js` — UI wiring (drag & drop, rendering, navigation)
 
-This is a manual copy of `html/` from the `mmtis-2b` generator repo, split into separate files (the original ships as one generated file). If the source changes, re-copy and re-split it here.
+This is a straight copy of `html/` from the `mmtis-2b` generator repo (`validator.html` → `index.html`, everything else unchanged) — that generator now writes this exact file layout on every build. To update after a source change, copy those 6 files here again.
