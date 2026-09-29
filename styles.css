@@ -45,7 +45,7 @@ label.toggle { display: inline-flex; gap: 6px; align-items: center; color: var(-
   cursor: pointer; font-size: 12.5px; }
 .chip.ERROR { border-color: color-mix(in srgb, var(--err) 45%, var(--line)); }
 .chip.WARN { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
-.chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip.off { opacity: .45; filter: grayscale(70%); text-decoration: line-through; }
 .chip b { font-weight: 600; }
 
 #tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }

@@ -5,7 +5,8 @@
   const DELIVERY_TAB = "#leveranse";  // kan ikkje kollidere med eit filnamn, sidan filene må slutte på .xml
   const $ = (id) => document.getElementById(id);
   const files = new Map();        // namn -> tekst, i innlasta rekkjefølgje
-  let result = null, delivery = null, current = null, ruleFilter = null, cursor = -1;
+  let result = null, delivery = null, current = null, cursor = -1;
+  const disabledRules = new Set();  // regel-id-ar skrudde av; tomt sett = alle reglar er valde
   let objFilter = "", unusedOnly = false;
 
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -29,7 +30,7 @@
   }));
   document.addEventListener("drop", (e) => { if (e.dataTransfer && e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]); });
   $("picker").addEventListener("change", (e) => { addFiles([...e.target.files]); e.target.value = ""; });
-  $("clear").addEventListener("click", () => { files.clear(); current = null; ruleFilter = null; run(); });
+  $("clear").addEventListener("click", () => { files.clear(); current = null; disabledRules.clear(); run(); });
   $("showWarn").addEventListener("change", () => render());
 
   // ---------------------------------------------------------------- validering
@@ -50,7 +51,7 @@
   }
 
   const showWarn = () => $("showWarn").checked;
-  const visible = (items) => items.filter((x) => (showWarn() || x.level === "ERROR") && (!ruleFilter || x.rule === ruleFilter));
+  const visible = (items) => items.filter((x) => (showWarn() || x.level === "ERROR") && !disabledRules.has(x.rule));
 
   function render() {
     if (!result) return;
@@ -70,13 +71,14 @@
       tally.get(k).n++;
       if (x.level === "ERROR") tally.get(k).level = "ERROR";
     }
-    if (ruleFilter && !tally.has(ruleFilter)) ruleFilter = null;
+    for (const r of [...disabledRules]) if (!tally.has(r)) disabledRules.delete(r);
     const chips = [...tally].sort((a, b) => (a[1].level === b[1].level ? b[1].n - a[1].n : a[1].level === "ERROR" ? -1 : 1));
     $("rules").innerHTML = chips.map(([rule, t]) =>
-      `<span class="chip ${t.level}${rule === ruleFilter ? " active" : ""}" data-rule="${esc(rule)}" title="${esc(ruleText(rule, t.level))}"><b>${esc(rule)}</b> ${t.n}</span>`
-    ).join("") + (ruleFilter ? ` <span class="chip" data-rule="">Vis alle reglar</span>` : "");
+      `<span class="chip ${t.level}${disabledRules.has(rule) ? " off" : ""}" data-rule="${esc(rule)}" title="${esc(ruleText(rule, t.level))}"><b>${esc(rule)}</b> ${t.n}</span>`
+    ).join("");
     $("rules").querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => {
-      ruleFilter = c.dataset.rule && c.dataset.rule !== ruleFilter ? c.dataset.rule : null;
+      const r = c.dataset.rule;
+      if (disabledRules.has(r)) disabledRules.delete(r); else disabledRules.add(r);
       render();
     }));
 
