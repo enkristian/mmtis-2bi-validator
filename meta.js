@@ -295,6 +295,12 @@ const META = {
     "text": "DistributionChannelRef, FulfilmentMethodRef, TypeOfTravelDocumentRef og SalesOfferPackageRef peikar på eit element av rett type."
    }
   ],
+  "REF-06": [
+   {
+    "level": "ERROR",
+    "text": "Referansen har @version (og verdien ikkje er any), og målet sin ValidBetween/ToDate er før referansedatoen. Berre ValidBetween blir tolka, ikkje validityConditions. Referansedatoen er dagens dato, eller --as-of YYYY-MM-DD."
+   }
+  ],
   "DEL-01": [
    {
     "level": "WARN",

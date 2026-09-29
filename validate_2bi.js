@@ -5,6 +5,8 @@
 (function (root) {
   "use strict";
 
+  const Rules = typeof require === "function" ? require("./rules.js") : root.Rules;
+
   const EXTERNAL_REF_ELEMENTS = new Set(["TypeOfFrameRef"]);
   const DEFAULT_EXTERNAL_PREFIXES = ["NSR:"];
   const GENERIC_VALUES = {
@@ -21,9 +23,6 @@
     TypeOfTravelDocumentRef: "TypeOfTravelDocument",
     SalesOfferPackageRef: "SalesOfferPackage",
   };
-  const ORG_REFS = new Set(["OrganisationRef", "AuthorityRef", "OperatorRef", "GeneralOrganisationRef",
-    "RetailConsortiumRef", "OtherOrganisationRef", "ManagementAgentRef", "TravelAgentRef",
-    "ServicedOrganisationRef"]);
   const TEST_MARKER = ":Test";
 
   // ------------------------------------------------------------------ XML-parsar med linjenummer
@@ -146,10 +145,6 @@
       for (let k = x.children.length - 1; k >= 0; k--) stack.push(x.children[k]);
     }
   }
-  function ancestor(nd, tag) {
-    for (let p = nd.parent; p; p = p.parent) if (p.tag === tag) return p;
-    return null;
-  }
   function path(nd) {
     const parts = [];
     for (let x = nd; x; x = x.parent) {
@@ -164,11 +159,33 @@
   }
   const basename = (f) => f.split(/[\\/]/).pop();
 
+  // ------------------------------------------------------------------ REF-06: utgått ValidBetween
+
+  function parseNetexDate(text) {
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(text || "");
+    if (!m) return null;
+    const d = new Date(`${m[1]}T00:00:00Z`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  function normalizeAsOf(asOf) {
+    if (asOf instanceof Date) return new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()));
+    if (typeof asOf === "string") return parseNetexDate(asOf);
+    return null;
+  }
+  // validityConditions blir ikkje tolka, same avgrensing som Python-versjonen.
+  function targetExpired(nd, asOf) {
+    const vb = child(nd, "ValidBetween");
+    const to = vb && child(vb, "ToDate");
+    const d = to && parseNetexDate(value(to));
+    return !!d && d < asOf;
+  }
+
   // ------------------------------------------------------------------ validering
 
   function validate(files, meta, opts) {
     opts = opts || {};
     const prefixes = DEFAULT_EXTERNAL_PREFIXES.concat(opts.allowExternal || []);
+    const asOf = normalizeAsOf(opts.asOf) || normalizeAsOf(new Date());
     const enumValues = {};
     for (const k of Object.keys(meta.enums)) enumValues[k] = new Set(meta.enums[k]);
     const productRefs = new Set(meta.productRefs);
@@ -209,71 +226,11 @@
       return [hit[0] || null, cands.length > 0];
     }
 
-    // Regel 2: kompletthet
-    const sops = all("SalesOfferPackage");
-    const externalDa = new Map();
-    for (const da of all("DistributionAssignment")) {
-      if (!ancestor(da, "SalesOfferPackage")) {
-        const r = child(da, "SalesOfferPackageRef");
-        if (r && r.attrib.ref) {
-          if (!externalDa.has(r.attrib.ref)) externalDa.set(r.attrib.ref, []);
-          externalDa.get(r.attrib.ref).push(da);
-        }
-      }
-    }
-    if (!sops.length) addFile("ERROR", "MA-SOP-00", roots[0].file, null, "PublicationDelivery", "datasettet har ingen SalesOfferPackage");
-
-    function checkDa(da) {
-      const chref = child(da, "DistributionChannelRef");
-      if ((!chref || !chref.attrib.ref) && !hasText(da, "DistributionChannelType")) {
-        error("MA-DA-02", da, "DistributionAssignment manglar DistributionChannelRef og DistributionChannelType");
-      }
-      const fmref = child(da, "FulfilmentMethodRef");
-      if (!fmref || !fmref.attrib.ref) error("MA-DA-03", da, "DistributionAssignment manglar FulfilmentMethodRef");
-      if (!hasText(da, "PaymentMethods")) {
-        let channel = null;
-        if (chref && chref.attrib.ref) channel = resolve(chref.attrib.ref, chref.attrib.version)[0];
-        if (!channel || !hasText(channel, "PaymentMethods")) {
-          error("MA-DA-04", da, "ingen PaymentMethods på DistributionAssignment eller på kanalen han peikar til");
-        }
-      }
-      if (!hasText(da, "DistributionRights")) warn("BOR-DA-01", da, "DistributionAssignment manglar DistributionRights");
-    }
-
-    const checked = new Set();
-    for (const sop of sops) {
-      for (const attr of ["id", "version"]) if (!sop.attrib[attr]) error("MA-SOP-01", sop, `SalesOfferPackage manglar @${attr}`);
-      if (!hasText(sop, "Name")) error("MA-SOP-02", sop, "SalesOfferPackage manglar Name");
-      if (!child(sop, "ValidBetween") && !child(sop, "validityConditions")) {
-        error("MA-SOP-03", sop, "SalesOfferPackage manglar ValidBetween eller validityConditions");
-      }
-      const spes = [...iter(sop, "SalesOfferPackageElement")];
-      if (!spes.some((s) => s.children.some((c) => productRefs.has(c.tag) && c.attrib.ref))) {
-        error("MA-SPE-01", sop, "ingen SalesOfferPackageElement med produktreferanse (PreassignedFareProductRef e.l.)");
-      }
-      for (const s of spes) if (!child(s, "TypeOfTravelDocumentRef")) {
-        warn("BOR-SPE-01", s, "SalesOfferPackageElement manglar TypeOfTravelDocumentRef");
-      }
-      const das = [...iter(sop, "DistributionAssignment")].concat(externalDa.get(sop.attrib.id || "") || []);
-      if (!das.length) error("MA-DA-01", sop, "SalesOfferPackage har ingen DistributionAssignment");
-      for (const da of das) { checkDa(da); checked.add(da); }
-    }
-    for (const da of all("DistributionAssignment")) if (!checked.has(da)) checkDa(da);
-
-    for (const dc of all("DistributionChannel")) {
-      if (!hasText(dc, "Name")) error("MA-DC-01", dc, "DistributionChannel manglar Name");
-      if (!hasText(dc, "DistributionChannelType")) error("MA-DC-02", dc, "DistributionChannel manglar DistributionChannelType");
-      const cd = child(dc, "ContactDetails");
-      if (!cd || !hasText(cd, "Url")) warn("BOR-DC-01", dc, "DistributionChannel manglar ContactDetails/Url");
-      if (!dc.children.some((c) => ORG_REFS.has(c.tag))) warn("BOR-DC-02", dc, "DistributionChannel manglar OrganisationRef (eigar)");
-    }
-    for (const fm of all("FulfilmentMethod")) {
-      if (!hasText(fm, "FulfilmentMethodType")) error("MA-FM-01", fm, "FulfilmentMethod manglar FulfilmentMethodType");
-      if (!hasText(fm, "Name")) error("MA-FM-02", fm, "FulfilmentMethod manglar Name");
-    }
-    for (const td of all("TypeOfTravelDocument")) {
-      if (!hasText(td, "MediaType")) warn("BOR-TOTD-01", td, "TypeOfTravelDocument manglar MediaType");
-      if (!hasText(td, "MachineReadable")) warn("BOR-TOTD-02", td, "TypeOfTravelDocument manglar MachineReadable");
+    // Regel 2: kompletthet (Må-/Bør-felt), som Rule-objekt i rules.js
+    const rulesDataset = { roots, all, resolve, productRefs };
+    for (const f of Rules.runRules(rulesDataset, Rules.RULES)) {
+      if (f.node) add(f.level, f.rule, f.node, f.message);
+      else addFile(f.level, f.rule, f.file, null, "PublicationDelivery", f.message);
     }
 
     // Regel 3: enumverdiar
@@ -315,8 +272,14 @@
         else if (!hit) {
           const have = [...new Set(byId.get(ref).map((c) => c.attrib.version || "-"))].sort();
           error("REF-02", nd, `${nd.tag} ref=«${ref}» version=«${ver}» finst ikkje (finst i version ${have.join(", ")})`);
-        } else if (REF_TARGETS[nd.tag] && hit.tag !== REF_TARGETS[nd.tag]) {
-          error("REF-05", nd, `${nd.tag} ref=«${ref}» peikar på eit ${hit.tag}`);
+        } else {
+          if (REF_TARGETS[nd.tag] && hit.tag !== REF_TARGETS[nd.tag]) {
+            error("REF-05", nd, `${nd.tag} ref=«${ref}» peikar på eit ${hit.tag}`);
+          }
+          if (ver && ver !== "any" && targetExpired(hit, asOf)) {
+            const to = value(child(child(hit, "ValidBetween"), "ToDate"));
+            error("REF-06", nd, `${nd.tag} ref=«${ref}» version=«${ver}» peikar på eit element som gjekk ut ${to.slice(0, 10)} (ValidBetween/ToDate)`);
+          }
         }
       }
     }

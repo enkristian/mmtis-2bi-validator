@@ -9,10 +9,11 @@ Everything runs in your browser. Drop in your own XML file(s) — nothing is upl
 ## Files
 
 - `index.html` — markup only
-- `rules.html` — every validation rule, one table per rule category
+- `rules.html` — every validation rule, with a citation to its official source (XSD file+line, the EU regulation, or an external spec) where one exists
 - `styles.css` — all styling
 - `meta.js` — NeTEx enum values, product references, and rule text (no user data)
+- `rules.js` — the `MA-*`/`BOR-*` completeness rules, each a `rule({id, level, appliesTo, check})` record
 - `validate_2bi.js` / `delivery_2bi.js` — validation logic
 - `app.js` — UI wiring (drag & drop, rendering, navigation)
 
-This is a straight copy of `html/` from the `mmtis-2b` generator repo (`validator.html` → `index.html`, everything else unchanged) — that generator now writes this exact file layout on every build. To update after a source change, copy those 7 files here again; `rules.html`'s back-link needs its `validator.html` href swapped to `index.html` (the generator's local dev filename vs. this repo's), same as on the previous copy.
+This is a straight copy of `html/` from the `mmtis-2b` generator repo (`validator.html` → `index.html`, everything else unchanged) — that generator now writes this exact file layout on every build. To update after a source change, copy those 8 files here again; `rules.html`'s back-link needs its `validator.html` href swapped to `index.html` (the generator's local dev filename vs. this repo's), same as on every previous copy.
